@@ -1,0 +1,2 @@
+#Renombrar el archivo a .env.local o crear uno nuevo
+NEXT_PUBLIC_MAPS_KEY="crear la llave accediendo a google cloud console y habilitando Maps JavaScript API, Places API y Geocoding API"
