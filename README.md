@@ -102,6 +102,7 @@ Antes de comenzar, asegúrate de tener instalado lo siguiente en tu sistema:
 ⚙️ Configuración del Proyecto
 
     Clonar el Repositorio:
+    
 ```
   git clone https://github.com/JoseAngelVirgenEslava2/full-stack-test.git
   cd full-stack-test
