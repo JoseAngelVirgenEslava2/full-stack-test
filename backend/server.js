@@ -8,10 +8,11 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const app = express();
 const PORT = 4000;
-const multer = require('multer'); // Importa multer
+const multer = require('multer');
 const path = require('path');
 const fs = require('fs'); // Para manejar rutas de archivos
 
+// Para depurar las rutas
 console.log('__dirname:', __dirname);
 const uploadDir = path.join(__dirname, 'uploads');
 console.log('Directorio de subida (uploadDir):', uploadDir);
@@ -22,12 +23,11 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 app.use(cors());
-app.use(express.json()); // Para parsear application/json
-app.use(express.urlencoded({ extended: true })); // Para parsear application/x-www-form-urlencoded
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// --- Configuración de Multer para la subida de archivos ---
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     
@@ -44,7 +44,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Límite de 5MB por ejemplo
+  limits: { fileSize: 5 * 1024 * 1024 }, // Limite de 5MB
   fileFilter: (req, file, cb) => {
     // Permite solo imágenes
     const filetypes = /jpeg|jpg|png|gif/;
@@ -59,9 +59,8 @@ const upload = multer({
   }
 });
 
-// Sirve archivos estáticos desde el directorio 'uploads'
+// Para servir archivos estaticos desde el directorio 'uploads'
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// --- Fin de la configuración de Multer ---
 
 
 app.post('/login', async (req, res)=> {
@@ -91,14 +90,13 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// Middleware corregido para autorizar al usuario o al administrador
+// Middleware para autorizar al usuario comun
 function authorizeUserOrAdmin(req, res, next) {
   const userId = req.user.userId; // obtenido del payload del token
   const userRole = req.user.role;
   const targetId = req.params.id;
 
-  // Permite si es ADMIN o si el ID del usuario del token coincide con el ID del recurso
-  if (userRole === 'ADMIN' || userId === targetId) {
+  if (userRole === 'USER' || userId === targetId) {
     next();
   } else {
     return res.status(403).json({ message: 'Acceso denegado' });
@@ -159,12 +157,9 @@ app.get('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// La ruta /register no usa multer por defecto en este setup, si necesitas subir fotos
-// al registrarte, deberías añadir upload.single('profilePicture') aquí también.
 app.post('/register', async (req, res) => {
   try {
     const { firstName, lastName, email, password, phoneNumber, street, number, city, postalCode } = req.body;
-    // profilePicture se establece en null por ahora, ya que esta ruta no maneja subidas de archivos directamente con multer
     const profilePicture = null; 
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -196,18 +191,23 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// --- RUTA POST /users MODIFICADA PARA MANEJAR SUBIDA DE ARCHIVOS ---
 app.post('/users', authenticateToken, authorizeAdmin, upload.single('profilePicture'), async (req, res) => {
   try {
-    // req.body contiene los campos de texto, req.file contiene la información del archivo
     const { firstName, lastName, email, password, phoneNumber, role, status, street, number, city, postalCode } = req.body;
     const profilePictureUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-    // Validaciones básicas
     if (!firstName || !lastName || !email || !password || !phoneNumber || !role || !status) {
       return res.status(400).json({ message: 'Todos los campos requeridos deben ser completados.' });
     }
 
+    // Validacion para el correo, si existe pues ya no se puede registrar
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'El correo electronico ya está registrado.' });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -226,24 +226,22 @@ app.post('/users', authenticateToken, authorizeAdmin, upload.single('profilePict
           city: city,
           postalCode: postalCode
         },
-        profilePicture: profilePictureUrl, // Guarda la URL del archivo subido
+        profilePicture: profilePictureUrl,
       },
     });
 
     res.status(201).json({ message: 'Usuario creado exitosamente', user });
   } catch (error) {
     console.error('Error creando usuario:', error);
-    if (error.code === 'P2002') { // Código de error de Prisma para violación de restricción única
+    if (error.code === 'P2002') { // Codigo de error de Prisma para violación de restricción unica
       return res.status(409).json({ message: 'El email ya está registrado.' });
     }
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
 
-// --- RUTA PUT /users/:id MODIFICADA PARA MANEJAR SUBIDA DE ARCHIVOS ---
 app.put('/users/:id', authenticateToken, authorizeUserOrAdmin, upload.single('profilePicture'), async (req, res) => {
   try {
-    // CAMBIO AQUI: Destructura los campos de dirección con los nombres exactos que vienen del frontend
     const { 
       firstName, 
       lastName, 
@@ -251,10 +249,10 @@ app.put('/users/:id', authenticateToken, authorizeUserOrAdmin, upload.single('pr
       phoneNumber, 
       role, 
       status, 
-      address_street, // <-- CAMBIO
-      address_number, // <-- CAMBIO
-      address_city,   // <-- CAMBIO
-      address_postalCode // <-- CAMBIO
+      address_street,
+      address_number,
+      address_city,
+      address_postalCode
     } = req.body;
 
     let profilePictureUrl = null;
@@ -272,11 +270,10 @@ app.put('/users/:id', authenticateToken, authorizeUserOrAdmin, upload.single('pr
       email,
       phoneNumber,
       address: {
-        // Usa los nuevos nombres para construir el objeto address para Prisma
-        street: address_street, // <-- CAMBIO
-        number: address_number, // <-- CAMBIO
-        city: address_city,     // <-- CAMBIO
-        postalCode: address_postalCode, // <-- CAMBIO
+        street: address_street,
+        number: address_number,
+        city: address_city,
+        postalCode: address_postalCode,
       },
       profilePicture: profilePictureUrl,
     };
