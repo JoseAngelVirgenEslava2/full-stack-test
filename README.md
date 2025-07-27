@@ -100,12 +100,11 @@ Antes de comenzar, asegúrate de tener instalado lo siguiente en tu sistema:
     Alguna de las APIs te pedira configurar el proyecto para el cual se va a usar, ahi se tiene que buscar el proyecto y restringir el acceso a la IP que podra usar el servicio
 
 ⚙️ Configuración del Proyecto
-
-    Clonar el Repositorio:
+    
     
 ```
-  git clone https://github.com/JoseAngelVirgenEslava2/full-stack-test.git
-  cd full-stack-test
+git clone https://github.com/JoseAngelVirgenEslava2/full-stack-test.git
+cd full-stack-test
 ```
 
 Configurar Variables de Entorno (.env files):
